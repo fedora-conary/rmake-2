@@ -1,3 +1,8 @@
+Changes in @NEW@:
+  o Client Changes:
+     * rMake now has a new, friendlier usage message and a help command.
+       (RMK-268)
+
 Changes in 1.0:
   o Changed name to 1.0
 
