@@ -17,9 +17,11 @@ import time
 from conary.build import recipe
 from conary.conaryclient import cmdline
 from conary.deps import deps
+from conary.repository import changeset
 from conary import trove
 
 from rmake.build import failure
+from rmake.build import publisher
 from rmake.lib import apiutils
 from rmake.lib.apiutils import freeze, thaw
 
@@ -218,7 +220,7 @@ class _FreezableBuildTrove(_AbstractBuildTrove):
                  'name'              : 'str',
                  'version'           : 'version',
                  'flavor'            : 'flavor',
-                 'buildRequirements' : 'troveSpecList',
+                 'buildRequirements' : 'set',
                  'builtTroves'       : 'troveTupleList',
                  'failureReason'     : 'FailureReason',
                  'packages'          : None,
@@ -260,8 +262,24 @@ class BuildTrove(_FreezableBuildTrove):
     """
 
     def __init__(self, *args, **kwargs):
-        self._publisher = None
+        self._publisher = publisher.JobStatusPublisher()
+        self._amOwner = False
         _FreezableBuildTrove.__init__(self, *args, **kwargs)
+
+    def amOwner(self):
+        """
+            Returns True if this process owns this trove, otherwise
+            returns False.  Processes that don't own troves are not allowed
+            to update other processes about the trove's status (this avoids
+            message loops).
+        """
+        return self._amOwner
+
+    def own(self):
+        self._amOwner = True
+
+    def disown(self):
+        self._amOwner = False
  
     def setPublisher(self, publisher):
         """
@@ -323,13 +341,12 @@ class BuildTrove(_FreezableBuildTrove):
             @param logPath: path to build log on the filesystem.
             @param pid: pid of build process.
         """
-
         self.pid = pid
         self.start = time.time()
         self.logPath = logPath
         self._setState(TROVE_STATE_BUILDING, status='')
 
-    def troveBuilt(self, changeSet):
+    def troveBuilt(self, troveList):
         """
             Sets the trove state to built.
 
@@ -337,11 +354,13 @@ class BuildTrove(_FreezableBuildTrove):
 
             @param changeSet: changeset created for this trove.
         """
+        if isinstance(troveList, changeset.ChangeSet):
+            troveList = [ x.getNewNameVersionFlavor()
+                          for x in troveList.iterNewTroveList() ]
         self.finish = time.time()
         self.pid = 0
-        self.setBuiltTroves([x.getNewNameVersionFlavor() for
-                             x in changeSet.iterNewTroveList() ])
-        self._setState(TROVE_STATE_BUILT, '', changeSet)
+        self.setBuiltTroves(troveList)
+        self._setState(TROVE_STATE_BUILT, '', troveList)
 
     def troveFailed(self, failureReason):
         """
@@ -357,7 +376,7 @@ class BuildTrove(_FreezableBuildTrove):
         if isinstance(failureReason, str):
             failureReason = failure.BuildFailed(failureReason)
         self.setFailureReason(failureReason)
-        self._setState(TROVE_STATE_FAILED, status=str(self.getFailureReason()))
+        self._setState(TROVE_STATE_FAILED, str(failureReason), failureReason)
 
     def troveMissingBuildReqs(self, buildReqs):
         """

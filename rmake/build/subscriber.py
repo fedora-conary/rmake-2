@@ -43,12 +43,9 @@ from rmake.lib.apiutils import thaw, freeze
 class _InternalSubscriber(subscriber.Subscriber):
 
     def __init__(self):
-        self.job = None
         subscriber.Subscriber.__init__(self)
 
     def attach(self, job):
-        assert(not self.job)
-        self.job = job
         publisher = job.getPublisher()
         publisher.subscribe(self.listeners, self._receiveEvents,
                             dispatcher=True)
@@ -75,10 +72,10 @@ class _JobDbLogger(_InternalSubscriber):
             _InternalSubscriber._receiveEvents, self,
             apiVersion, eventList)
 
-    def troveBuilt(self, trove, cs):
+    def troveBuilt(self, trove, troveList):
         self.db.troveBuilt(trove)
 
-    def troveFailed(self, trove):
+    def troveFailed(self, trove, failureReason):
         self.db.troveFailed(trove)
 
     def troveBuilding(self, trove):
@@ -123,7 +120,7 @@ class _RmakeServerPublisherProxy(_InternalSubscriber):
 
     def __init__(self, uri):
         from rmake.server import server
-        self.proxy = apirpc.ApiProxy(server.rMakeServer, uri)
+        self.proxy = apirpc.XMLApiProxy(server.rMakeServer, uri)
         _InternalSubscriber.__init__(self)
 
     def _receiveEvents(self, apiVer, eventList):
@@ -135,6 +132,7 @@ class _RmakeServerPublisherProxy(_InternalSubscriber):
         from rmake.build import buildtrove
         newEventList = []
         for event, data in eventList:
+            jobId =  data[0].jobId
             if isinstance(data[0], buildjob.BuildJob):
                 newData = [ data[0].jobId ]
             if isinstance(data[0], buildtrove.BuildTrove):
@@ -143,7 +141,7 @@ class _RmakeServerPublisherProxy(_InternalSubscriber):
             newEventList.append((event, newData))
         newEventList = (apiVer, newEventList)
 
-        self.proxy.emitEvents(self.job.jobId, newEventList)
+        self.proxy.emitEvents(jobId, newEventList)
 
 class _EventListFreezer(object):
     """
@@ -173,6 +171,7 @@ class _EventListFreezer(object):
     def thaw_JOB_TROVES_SET(class_, apiVer, data):
         return [ data[0], thaw('troveTupleList', data[1]) ]
 
+
     @classmethod
     def freeze_JOB_COMMITTED(class_, apiVer, data):
         return [ data[0], freeze('troveTupleList', data[1]) ]
@@ -180,6 +179,22 @@ class _EventListFreezer(object):
     @classmethod
     def thaw_JOB_COMMITTED(class_, apiVer, data):
         return [ data[0], thaw('troveTupleList', data[1]) ]
+
+    @classmethod
+    def freeze_TROVE_BUILT(class_, apiVer, data):
+        return [ data[0], freeze('troveTupleList', data[1]) ]
+
+    @classmethod
+    def thaw_TROVE_BUILT(class_, apiVer, data):
+        return [ data[0], thaw('troveTupleList', data[1]) ]
+
+    @classmethod
+    def freeze_TROVE_FAILED(class_, apiVer, data):
+        return [ data[0], freeze('FailureReason', data[1]) ]
+
+    @classmethod
+    def thaw_TROVE_FAILED(class_, apiVer, data):
+        return [ data[0], thaw('FailureReason', data[1]) ]
 
     @classmethod
     def __freeze__(class_, eventList):

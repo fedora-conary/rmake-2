@@ -255,6 +255,7 @@ class BuildJob(_FreezableBuildJob):
         publisher = self.getPublisher()
         for trove in buildTroves:
             trove.setPublisher(publisher)
+            trove.own()
         self._publisher.buildTrovesSet(self)
 
     def jobQueued(self):
@@ -289,7 +290,7 @@ class BuildJob(_FreezableBuildJob):
         # right now jobStopped is an alias for job failed.
         # but I think we may wish to give it its own state
         # at some point so I'm distinguishing it here.
-        self.jobFailed(failure.JobStopped(failureReason))
+        self.jobFailed(failure.Stopped(failureReason))
 
     def jobCommitting(self):
         self._setState(JOB_STATE_COMMITTING, '')
@@ -325,5 +326,4 @@ def NewBuildJob(db, troveTups, jobConfig=None, state=JOB_STATE_INIT, uuid=''):
     """
     job = BuildJob(None, troveTups, state=state, uuid=uuid)
     db.addJob(job, jobConfig)
-    db.subscribeToJob(job)
     return job
