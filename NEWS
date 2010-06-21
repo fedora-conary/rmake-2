@@ -1,11 +1,15 @@
-Changes in @NEW@:
+Changes in 2.0.4:
  o New Features:
+    * constants.changeset now contains the hg changeset of this version of 
+      rMake. (RBL-6494)
     * Added a isolateTroves build configuration option to disable
       intra-job trove dependencies. (RMK-1048)
 
  o Bug Fixes:
     * Cached chroots are now deleted if they subsequently fail to start.
       (RMK-1049)
+    * Chroots now contain a device called /dev/random though the real
+      underlying device is the one used for /dev/urandom. (RMK-839)
 
 Changes in 2.0.3:
  o Bug Fixes:
