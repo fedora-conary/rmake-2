@@ -37,7 +37,6 @@ from rmake.lib.apiutils import api, api_parameters, api_return, freeze, thaw
 from rmake.lib.apiutils import api_nonforking
 from rmake.lib import apirpc
 from rmake.lib import logger
-from rmake.lib import osutil
 from rmake.lib.rpcproxy import ShimAddress
 from rmake.worker import worker
 
@@ -348,9 +347,14 @@ class rMakeServer(apirpc.XMLApiServer):
         for serverName, user, password in self.cfg.getUserGlobs():
             buildConfig.user.addServerGlob(serverName, user, password)
         proxyUrl = self.cfg.getProxyUrl()
-        if proxyUrl and not buildConfig.conaryProxy:
-            buildConfig.conaryProxy['http'] = proxyUrl
-            buildConfig.conaryProxy['https'] = proxyUrl
+        if proxyUrl:
+            if hasattr(buildConfig,'proxyMap'):
+                if not buildConfig.proxyMap:
+                    buildConfig.proxyMap.update('conary:http*', '*', [proxyUrl])
+            else:
+                if not buildConfig.conaryProxy:
+                    buildConfig.conaryProxy['http'] = proxyUrl
+                    buildConfig.conaryProxy['https'] = proxyUrl
 
     def _serveLoopHook(self):
         if not self._initialized and hasattr(self, 'worker'):
@@ -633,10 +637,6 @@ class rMakeServer(apirpc.XMLApiServer):
                 logLevel = logging.INFO
             serverLogger.enableConsole(logLevel)
         serverLogger.info('*** Started rMake Server at pid %s (serving at %s)' % (os.getpid(), uri))
-        try:
-            osutil.setproctitle('rmake server %s' % (uri,))
-        except:
-            pass
         try:
             self._initialized = False
             self.db = None
