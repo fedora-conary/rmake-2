@@ -1,18 +1,17 @@
 #
-# Copyright (c) rPath, Inc.
+# Copyright (c) SAS Institute Inc.
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 
 
@@ -21,13 +20,12 @@ import itertools
 import time
 
 from conary import conaryclient
-from conary.conaryclient import resolve
 from conary.deps import deps
 from conary.lib import log
 from conary.local import database
 from conary.repository import trovesource
 
-from rmake.lib import apiutils, flavorutil, recipeutil
+from rmake.lib import flavorutil, recipeutil
 from rmake.lib.apiutils import register, freeze, thaw
 from rmake.worker import resolvesource
 
@@ -40,6 +38,7 @@ class ResolveResult(object):
         self.missingBuildReqs = []
         self.missingDeps = []
         self.inCycle = inCycle
+        self.jobHash = None
 
     def getBuildReqs(self):
         assert(self.success)
@@ -127,7 +126,10 @@ class DependencyResolver(object):
         else:
             builtTroveTups = resolveJob.getBuiltTroves()
 
-        builtTroves = self.repos.getTroves(builtTroveTups, withFiles=False)
+        if cfg.isolateTroves:
+            builtTroves = []
+        else:
+            builtTroves = self.repos.getTroves(builtTroveTups, withFiles=False)
         builtTroveSource = resolvesource.BuiltTroveSource(builtTroves,
                                                           self.repos)
         if builtTroves:
@@ -227,7 +229,7 @@ class DependencyResolver(object):
         self.logger.debug('   finding buildreqs for %s....' % trv.getName())
         self.logger.debug('   resolving deps for %s...' % trv.getName())
         start = time.time()
-        buildReqJobs = crossReqJobs = bootstrapJobs = []
+        buildReqJobs = crossReqJobs = bootstrapJobs = set()
         if buildReqs:
             success, results = self._resolve(cfg, resolveResult, trv,
                                              searchSource, resolveSource,
@@ -266,6 +268,14 @@ class DependencyResolver(object):
                 searchSource.close()
                 resolveSource.close()
                 return resolveResult
+
+        if (searchSource.mainSource
+                and False not in searchSource.mainSource.hasTroves(
+                    [(x[0], x[2][0], x[2][1]) for x in
+                        bootstrapJobs | buildReqJobs | crossReqJobs])):
+            # All troves came from resolveTroves therefore the result is
+            # cacheable.
+            resolveResult.jobHash = resolveJob.getJobHash()
         client.close()
         searchSource.close()
         resolveSource.close()
@@ -284,6 +294,9 @@ class DependencyResolver(object):
             self.logger.info('\n    '.join(['%s=%s[%s]' % (x[0],
                                                           x[2][0], x[2][1])
                                for x in sorted(buildReqJobs)]))
+        if resolveResult.jobHash:
+            self.logger.info("Resolve result can be cached, hash key is %s",
+                    resolveResult.jobHash)
         resolveResult.troveResolved(buildReqJobs, crossReqJobs, bootstrapJobs)
         return resolveResult
 
@@ -292,8 +305,6 @@ class DependencyResolver(object):
                  installLabelPath, searchFlavor, reqs, isCross=False):
         resolveSource.setLabelPath(installLabelPath)
         client = conaryclient.ConaryClient(cfg)
-
-        finalToInstall = {}
 
         # we allow build requirements to be matched against anywhere on the
         # install label.  Create a list of all of this trove's labels,

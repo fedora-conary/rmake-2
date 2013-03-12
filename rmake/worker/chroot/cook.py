@@ -1,18 +1,17 @@
 #
-# Copyright (c) rPath, Inc.
+# Copyright (c) SAS Institute Inc.
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 
 
@@ -39,7 +38,6 @@ from rmake.lib import logfile
 from rmake.lib import pipereader
 from rmake.lib import recipeutil
 from rmake.lib.apiutils import thaw, freeze
-from rmake.worker import resolvesource
 
 
 class CookResults(object):
@@ -105,7 +103,7 @@ class CookResults(object):
 
 
 def cookTrove(cfg, repos, logger, name, version, flavorList, targetLabel,
-              loadSpecsList=None, builtTroves=None, logData=None,
+              loadSpecsList=None, logData=None,
               buildReqs=None, crossReqs=None):
     if not isinstance(flavorList, (tuple, list)):
         flavorList = [flavorList]
@@ -141,7 +139,7 @@ def cookTrove(cfg, repos, logger, name, version, flavorList, targetLabel,
                 log.setVerbosity(log.DEBUG)
                 log.info("Cook process started (pid %s)" % os.getpid())
                 _cookTrove(cfg, repos, name, version, flavorList, targetLabel,
-                           loadSpecsList, builtTroves,
+                           loadSpecsList,
                            csFile, buildReqs=buildReqs, crossReqs=crossReqs,
                            failureFd=outF, logger=logger)
             except Exception, msg:
@@ -244,7 +242,7 @@ def _buildFailed(failureFd, errMsg, traceBack=''):
     os._exit(1)
 
 def _cookTrove(cfg, repos, name, version, flavorList, targetLabel,
-               loadSpecsList, builtTroves, csFile, buildReqs, crossReqs,
+               loadSpecsList, csFile, buildReqs, crossReqs,
                failureFd, logger):
     baseFlavor = cfg.buildFlavor
     db = database.Database(cfg.root, cfg.dbPath)
@@ -325,27 +323,6 @@ def _cookTrove(cfg, repos, name, version, flavorList, targetLabel,
             and hasattr(cfg, 'defaultBuildReqs')):
             for recipeClass in recipeClasses:
                 recipeClass.buildRequires += cfg.defaultBuildReqs
-
-        if builtTroves:
-            # FIXME: is this cached?
-            builtTroves = repos.getTroves(builtTroves, withFiles=False)
-
-            builtTroves = resolvesource.BuiltTroveSource(builtTroves, repos)
-            builtTroves.searchAsRepository()
-            if targetLabel:
-                builtTroves = recipeutil.RemoveHostSource(builtTroves,
-                                                          targetLabel.getHost())
-            else:
-                builtTroves = recipeutil.RemoveHostSource(builtTroves,
-                                              version.trailingLabel().getHost())
-
-            # this should only make a difference when cooking groups, redirects,
-            # etc.
-            oldRepos = repos
-            repos = resolvesource.DepHandlerSource(builtTroves,
-                                                   None,
-                                                   repos)
-            repos.TROVE_QUERY_ALL = oldRepos.TROVE_QUERY_ALL
 
         # if we're already on the target label, we'll assume no targeting 
         # is necessary

@@ -1,28 +1,26 @@
 #
-# Copyright (c) rPath, Inc.
+# Copyright (c) SAS Institute Inc.
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 
 
-import copy
 import itertools
 from conary.deps import deps
 from conary.local import deptable
 
 from conary.conaryclient import resolve
-from conary.repository import findtrove,trovesource
+from conary.repository import trovesource
 
 from rmake.lib import flavorutil
 
@@ -183,7 +181,6 @@ class TroveSourceMesh(trovesource.SearchableTroveSource):
         else:
             map = {}
             newQuery = list(query)
-            labelDict = {}
             names = [(x[0], x[1][0], x[1][2]) for x in enumerate(query)]
             for idx, name, flavor in names:
                 labels = set(x[1].trailingLabel() for x in
@@ -286,7 +283,7 @@ class TroveSourceMesh(trovesource.SearchableTroveSource):
                 results.setdefault(troveSpec, []).extend(troveTups)
         if not allowMissing:
             for troveSpec in troveSpecs:
-                assert(troveSpec in finalResults)
+                assert(troveSpec in results)
         return results
 
     def resolveDependencies(self, label, depList, *args, **kw):
@@ -330,7 +327,6 @@ class DepHandlerSource(TroveSourceMesh):
             self.resolveTroveSource = troveListList
         else:
             if troveListList:
-                troveSources = []
                 for troveList in troveListList:
                     allTroves = [ x.getNameVersionFlavor() for x in troveList ]
                     childTroves = itertools.chain(*
@@ -425,7 +421,6 @@ class ResolutionMesh(resolve.BasicResolutionMethod):
             if depSet not in suggMap2:
                 suggMap2[depSet] = [[] for x in depSet.iterDeps() ]
         for depSet, results in suggMap.iteritems():
-            finalResults = []
             mainResults = suggMap2[depSet]
             for troveList1, troveList2 in itertools.izip(results, mainResults):
                 troveList2.extend(troveList1)
