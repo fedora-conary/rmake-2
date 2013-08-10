@@ -19,7 +19,6 @@ all: default-subdirs default-all
 
 export TOPDIR = $(shell pwd)
 export DISTDIR = $(TOPDIR)/rmake-$(VERSION)
-export CHANGESET = $(shell ./scripts/hg-version.sh)
 SUBDIRS=rmake commands extra man rmake_plugins
 
 .PHONY: clean dist install subdirs
@@ -48,7 +47,13 @@ dist:
 
 
 archive:
-	hg archive -t tbz2 -r rmake-$(VERSION) rmake-$(VERSION).tar.bz2
+	@rm -rf /tmp/rmake-$(VERSION) /tmp/rmake$(VERSION)-tmp
+	@mkdir -p /tmp/rmake-$(VERSION)-tmp
+	@git archive --format tar $(VERSION) | (cd /tmp/rmake-$(VERSION)-tmp/ ; tar x )
+	@mv /tmp/rmake-$(VERSION)-tmp/ /tmp/rmake-$(VERSION)/
+	@dir=$$PWD; cd /tmp; tar -c --bzip2 -f $$dir/rmake-$(VERSION).tar.bz2 rmake-$(VERSION)
+	@rm -rf /tmp/pesign-$(VERSION)
+	@echo "The archive is in rmake-$(VERSION).tar.bz2"
 
 sanitycheck: archive
 	@echo "=== sanity building/testing rmake ==="; \
@@ -63,7 +68,7 @@ sanitycheck: archive
 forcedist: archive sanitycheck
 
 tag:
-	hg tag -f rmake-$(VERSION)
+	git tag $(VERSION) refs/heads/master
 
 clean: clean-subdirs default-clean
 
